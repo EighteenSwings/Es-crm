@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Eighteen Swings CRM</title>
+<meta name="theme-color" content="#1F4D36">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ES CRM">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@112,600;125,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script src="config.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Eighteen <span>Swings</span></h1>
+      <p>Bookings &amp; enquiries</p>
+    </div>
+    <div class="head-actions">
+      <button class="sync-pill" id="syncPill" type="button" title="Sync with Google Drive"><i></i><span id="syncText">Saved on this device</span></button>
+      <button class="btn primary" id="addBtn" type="button">+ New enquiry</button>
+    </div>
+  </header>
+
+  <div id="notice" hidden></div>
+
+  <section class="stats" aria-label="Summary">
+    <div class="stat"><b id="sOpen">0</b><small>Open enquiries</small></div>
+    <div class="stat"><b id="sPipe">£0</b><small>Quoted, not booked</small></div>
+    <div class="stat"><b id="sBooked">£0</b><small>Booked revenue</small></div>
+    <div class="stat"><b id="sConv">–</b><small>Win rate</small></div>
+  </section>
+
+  <div class="bar">
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-view="pipeline" type="button">Pipeline</button>
+      <button role="tab" aria-selected="false" data-view="upcoming" type="button">Upcoming</button>
+      <button role="tab" aria-selected="false" data-view="packages" type="button">Packages</button>
+      <button role="tab" aria-selected="false" data-view="settings" type="button">Data</button>
+    </div>
+    <input class="search" id="q" type="search" placeholder="Search name, venue, postcode" aria-label="Search">
+  </div>
+
+  <section id="view-pipeline"><div class="board"><div class="cols" id="cols"></div></div></section>
+  <section id="view-upcoming" hidden></section>
+  <section id="view-packages" hidden></section>
+  <section id="view-settings" hidden></section>
+</div>
+
+<div class="overlay" id="overlay" hidden>
+  <form class="sheet" id="form" novalidate>
+    <div class="head"><h2 id="formTitle">New enquiry</h2><button class="btn ghost" type="button" id="closeBtn">Close</button></div>
+
+    <fieldset><legend>Client</legend>
+      <div class="grid2">
+        <label class="f">Name<input id="f-name" required placeholder="e.g. Sophie Hart" autocomplete="off"></label>
+        <label class="f">Partner or company<input id="f-partner" placeholder="e.g. Tom Ellis" autocomplete="off"></label>
+        <label class="f">Email<input id="f-email" type="email" autocomplete="off"></label>
+        <label class="f">Phone<input id="f-phone" type="tel" autocomplete="off"></label>
+        <label class="f">Source<select id="f-source"><option>Website</option><option>Instagram</option><option>TikTok</option><option>Wedding planner</option><option>Venue referral</option><option>Wedding fair</option><option>Word of mouth</option><option>Other</option></select></label>
+        <label class="f">Stage<select id="f-stage"></select></label>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>Event</legend>
+      <div class="grid2">
+        <label class="f">Event date<input id="f-date" type="date"></label>
+        <label class="f">Event type<select id="f-type"><option>Wedding: morning</option><option>Wedding: drinks reception</option><option>Wedding: morning + reception</option><option>Corporate</option><option>Private party</option><option>Other</option></select></label>
+        <label class="f">Venue<input id="f-venue" autocomplete="off"></label>
+        <label class="f">Postcode<input id="f-postcode" autocapitalize="characters" autocomplete="off"></label>
+        <label class="f">Guests (approx.)<input id="f-guests" type="number" min="0" inputmode="numeric"></label>
+        <label class="f">Start time<input id="f-time" type="time"></label>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>Quote</legend>
+      <div class="grid2">
+        <label class="f">Package<select id="f-package"></select></label>
+        <label class="f">Extra hours<input id="f-extra" type="number" min="0" step="0.5" inputmode="decimal" value="0"></label>
+        <label class="f">Miles from base (one way)<input id="f-miles" type="number" min="0" inputmode="numeric" value="0"></label>
+        <label class="f">Agreed price override (£)<input id="f-override" type="number" min="0" inputmode="numeric" placeholder="Blank = use calculator"></label>
+      </div>
+      <div class="quote" id="quoteBox"></div>
+    </fieldset>
+
+    <fieldset><legend>Paperwork &amp; money</legend>
+      <div class="grid2">
+        <label class="check"><input type="checkbox" id="f-contract"> Contract signed</label>
+        <label class="check"><input type="checkbox" id="f-deposit"> Deposit paid</label>
+        <label class="check"><input type="checkbox" id="f-balance"> Balance paid</label>
+        <label class="check"><input type="checkbox" id="f-review"> Review &amp; photos asked</label>
+        <label class="f">Last contact<input id="f-contact" type="date"></label>
+        <label class="f" id="lostWrap">Reason lost<input id="f-lost" placeholder="e.g. Budget, date gone"></label>
+      </div>
+      <label class="f">Notes<textarea id="f-notes" placeholder="Timings, access, power, what they asked about"></textarea></label>
+    </fieldset>
+
+    <div class="actions">
+      <button class="btn danger" type="button" id="delBtn">Delete</button>
+      <div class="row-btns">
+        <button class="btn" type="button" id="cancelBtn">Cancel</button>
+        <button class="btn primary" type="submit">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
