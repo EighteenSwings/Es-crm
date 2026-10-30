@@ -1,6 +1,6 @@
 // Offline support for Eighteen Swings CRM.
 // Bump VERSION whenever you change app files so phones pick up the new version.
-const VERSION = "es-crm-v4";
+const VERSION = "es-crm-v5";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
   "icons/icon-maskable-512.png", "icons/logo-green.png", "icons/logo-cream.png", "fonts/schola-bold.woff"];

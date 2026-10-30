@@ -68,9 +68,11 @@ header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-be
 .notice{border:1px dashed var(--line);border-radius:var(--r);padding:14px 16px;color:var(--muted);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .notice.flag{border:1px solid var(--flag);background:var(--flag-soft);color:var(--flag-ink)}
 
-.board{overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:6px;-webkit-overflow-scrolling:touch}
-.cols{display:grid;grid-template-columns:repeat(6,minmax(232px,1fr));gap:12px;min-width:min-content}
-.col{display:flex;flex-direction:column;gap:8px;scroll-snap-align:start;min-width:0}
+.board{padding-bottom:6px}
+.cols{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+@media (max-width:1180px){.cols{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:22px}}
+@media (max-width:640px){.cols{grid-template-columns:minmax(0,1fr);row-gap:18px}.col .empty-col{padding:4px 2px}}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
 .colhead{display:flex;align-items:baseline;gap:8px;padding:6px 2px;border-bottom:1px solid var(--line)}
 .colhead .hole{font-family:var(--mono);font-size:11px;color:var(--muted)}
 .colhead h3{margin:0;font-family:var(--display);font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase}
