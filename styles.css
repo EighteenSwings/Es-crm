@@ -151,10 +151,9 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:60
 .f textarea{min-height:84px;resize:vertical}
 .check{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--ink)}
 .check input{width:18px;height:18px;accent-color:var(--green-fill)}
-.overlay{position:fixed;inset:0;background:rgb(12 20 4 / .55);z-index:20;display:flex;justify-content:flex-end}
-.sheet{background:var(--card);width:min(560px,100%);height:100%;overflow-y:auto;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;
-  padding-top:max(18px,env(safe-area-inset-top,0px));padding-bottom:max(18px,env(safe-area-inset-bottom,0px));
-  padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));gap:16px}
+.overlay{position:fixed;inset:0;background:rgb(12 20 4 / .55);z-index:20;display:flex;justify-content:center;align-items:center;padding:24px}
+.sheet{background:var(--card);width:min(620px,100%);max-height:calc(100vh - 48px);border-radius:16px;box-shadow:0 20px 60px rgb(0 0 0 / .3);overflow-y:auto;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:20px 22px;gap:16px}
 .sheet h2{margin:0;font-family:var(--display);font-weight:600;font-size:20px}
 .sheet .head{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -167,7 +166,14 @@ legend{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:
 .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
 .row-btns{display:flex;gap:8px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:14px;z-index:30;max-width:calc(100% - 32px);text-align:center}
-@media (prefers-reduced-motion:no-preference){.sheet{animation:in .18s ease-out}@keyframes in{from{transform:translateX(24px);opacity:.6}}}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:pop .18s ease-out}@keyframes pop{from{transform:translateY(16px) scale(.98);opacity:.6}}}
+@media (max-width:640px){
+  .overlay{align-items:flex-end;padding:0;padding-top:max(20px,env(safe-area-inset-top,0px))}
+  .sheet{width:100%;max-height:100%;border-radius:18px 18px 0 0;padding:10px 16px max(16px,env(safe-area-inset-bottom,0px))}
+  .sheet::before{content:"";align-self:center;width:40px;height:5px;border-radius:3px;background:var(--line);flex:none}
+  .sheet .head{position:sticky;top:-10px;background:var(--card);z-index:2;padding:6px 0;margin-top:-6px}
+}
+@media (max-width:640px) and (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(40%)}}}
 @media (prefers-reduced-motion:reduce){.sync-pill.busy i{animation:none}}
 .colhead h3,.section-h h2,.panel h3,.sheet h2,legend{font-weight:700}
 
@@ -228,7 +234,7 @@ legend{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:
 .legend .st-booked,.legend .st-quoted,.legend .st-new{padding:0}
 @media (max-width:640px){
   .day{min-height:52px;padding:4px 3px;align-items:center}
-  .ev{width:8px;height:8px;padding:0;border-radius:50%}
+  .ev{width:8px;height:8px;padding:0;border-radius:50%;pointer-events:none}
   .ev span{display:none}
   .legend{margin-left:0;width:100%}
 }
@@ -405,3 +411,12 @@ button.jdone{border:0;background:transparent;padding:4px 2px;cursor:pointer;text
 .hist{margin:0;padding-left:18px;font-size:13px;color:var(--muted)}
 .email-log button{display:flex;justify-content:space-between;gap:10px;border:0;background:transparent;padding:4px 0;cursor:pointer;color:inherit;text-align:left;font-size:13px}
 .email-log button:hover span:first-child{text-decoration:underline}
+
+.day[data-day]{cursor:pointer}
+.day[data-day]:hover{background:var(--bg)}
+.day-list{display:flex;flex-direction:column;gap:6px}
+.day-list button{display:flex;justify-content:space-between;gap:10px;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;cursor:pointer;color:inherit}
+.day-list button span{color:var(--muted);font-size:13px}
+
+#form.is-new .hide-new{display:none!important}
+#form.is-new #saveBtn::after{content:" enquiry"}

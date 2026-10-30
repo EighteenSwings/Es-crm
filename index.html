@@ -88,7 +88,7 @@
         <label class="f">Email<input id="f-email" type="email" autocomplete="off"></label>
         <label class="f">Phone<input id="f-phone" type="tel" autocomplete="off"></label>
         <label class="f">Source<select id="f-source"><option>Website</option><option>Instagram</option><option>TikTok</option><option>Wedding planner</option><option>Venue referral</option><option>Wedding fair</option><option>Word of mouth</option><option>Other</option></select></label>
-        <label class="f">Stage<select id="f-stage"></select></label>
+        <label class="f hide-new">Stage<select id="f-stage"></select></label>
       </div>
     </fieldset></details>
 
@@ -118,7 +118,7 @@
       <div class="quote" id="quoteBox"></div>
     </fieldset></details>
 
-    <details class="sec" data-sec="money" open><summary>Paperwork &amp; money</summary><fieldset>
+    <details class="sec hide-new" data-sec="money" open><summary>Paperwork &amp; money</summary><fieldset>
       <div class="grid2">
         <label class="check"><input type="checkbox" id="f-contract"> Contract signed</label>
         <label class="check"><input type="checkbox" id="f-deposit"> Deposit paid</label>
@@ -131,7 +131,7 @@
       <label class="f">Notes<textarea id="f-notes" placeholder="Timings, access, power, what they asked about"></textarea></label>
     </fieldset></details>
 
-    <div class="doc-actions">
+    <div class="doc-actions hide-new">
       <div class="menu-wrap"><button class="btn" type="button" id="mailBtn">✉ Email</button><div class="menu" id="mailMenu" hidden></div></div>
       <button class="btn" type="button" id="quoteBtn">Quote PDF</button>
       <div class="menu-wrap"><button class="btn" type="button" id="invBtn">Invoice</button><div class="menu" id="invMenu" hidden><button type="button" data-inv="deposit">Deposit invoice</button><button type="button" data-inv="balance">Balance invoice</button></div></div>
@@ -141,7 +141,7 @@
       <button class="btn danger" type="button" id="delBtn">Delete</button>
       <div class="row-btns">
         <button class="btn" type="button" id="cancelBtn">Cancel</button>
-        <button class="btn primary" type="submit">Save</button>
+        <button class="btn primary" type="submit" id="saveBtn">Save</button>
       </div>
     </div>
   </form>

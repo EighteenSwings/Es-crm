@@ -696,6 +696,25 @@ if (typeof document !== "undefined") (function () {
     $("tplView").hidden = true; changed(); renderEmails(); toast("Template deleted");
   };
 
+  /** Tapping a calendar day: one booking opens it, several list them, an empty day starts a new enquiry on that date. */
+  function openDay(iso) {
+    const evs = list().filter(b => b.date === iso && b.stage !== "lost").sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+    if (evs.length === 1) { openForm(evs[0]); return; }
+    const nice = new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    $("logBody").innerHTML = `<h2>${esc(nice)}</h2>${evs.length ? `<div class="day-list">${evs.map(b => `<button type="button" data-dayopen="${esc(b.id)}"><b>${esc(b.name || "Unnamed")}</b><span>${esc((STAGES.find(s => s.id === b.stage) || {}).label || "")}${b.time ? " · " + esc(b.time) : ""}</span></button>`).join("")}</div>`
+      : `<p class="hint">Nothing booked on this day.</p>`}<div class="btn-row"><button type="button" class="btn primary" data-daynew="${iso}">+ New enquiry for this date</button></div>`;
+    $("logView").hidden = false;
+  }
+  $("logBody").addEventListener("click", e => {
+    const o = e.target.closest("[data-dayopen]"); if (o) { $("logView").hidden = true; openForm(data.bookings[o.dataset.dayopen]); return; }
+    const n = e.target.closest("[data-daynew]"); if (n) { $("logView").hidden = true; openForm(null); $("f-date").value = n.dataset.daynew; updateQuote(); }
+  });
+  document.addEventListener("click", e => {
+    if (e.target.closest(".ev")) return;
+    const d = e.target.closest(".day[data-day]"); if (d) openDay(d.dataset.day);
+  });
+  document.addEventListener("keydown", e => { const d = e.target.closest && e.target.closest(".day[data-day]"); if (d && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDay(d.dataset.day); } });
+
   function renderCalendar() {
     const el = $("view-calendar");
     const y = calMonth.getFullYear(), m = calMonth.getMonth();
@@ -709,7 +728,7 @@ if (typeof document !== "undefined") (function () {
     for (let d = 1; d <= days; d++) {
       const iso = ym + "-" + String(d).padStart(2, "0"), evs = byDay[d] || [];
       const held = evs.filter(b => LOCKED.includes(b.stage)).length;
-      cells += `<div class="day${iso === today ? " today" : ""}${held > 1 ? " clash" : ""}"><span class="dn">${d}</span>
+      cells += `<div class="day${iso === today ? " today" : ""}${held > 1 ? " clash" : ""}" data-day="${iso}" role="button" tabindex="0" aria-label="${esc(new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }))}${evs.length ? ", " + evs.length + (evs.length === 1 ? " booking" : " bookings") : ""}"><span class="dn">${d}</span>
         ${evs.map(b => `<button type="button" class="ev st-${esc(b.stage)}" data-id="${esc(b.id)}" title="${esc(b.name)}"><span>${esc(b.name || "Unnamed")}</span></button>`).join("")}</div>`;
     }
     const label = first.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
@@ -843,7 +862,7 @@ if (typeof document !== "undefined") (function () {
     const b = readForm(), c = calc(b), cfg = data.config;
     $("quoteBox").innerHTML = `<div><span>${esc(c.pkg.name || "Package")}</span><span class="num">${gbp(c.pkg.price)}</span></div>
       ${c.extra ? `<div><span>Extra time (${b.extraHours}h × ${gbp(cfg.extraHour)})</span><span class="num">${gbp(c.extra)}</span></div>` : ""}
-      ${c.travel ? `<div><span>Travel (${c.travelMiles} mi beyond ${cfg.freeMiles}, both ways)</span><span class="num">${gbp(c.travel)}</span></div>` : ""}
+      ${c.travel ? `<div><span>Travel: ${c.travelMiles} miles beyond the ${cfg.freeMiles}-mile free radius, each way (${c.travelMiles * 2} miles at ${(+cfg.perMile || 0) < 1 ? Math.round((+cfg.perMile || 0) * 100) + "p" : gbp(cfg.perMile)})</span><span class="num">${gbp(c.travel)}</span></div>` : ""}
       ${b.override !== "" ? `<div><span>Calculator price</span><span class="num">${gbp(c.calcTotal)}</span></div>` : ""}
       <div class="total"><span>${b.override !== "" ? "Agreed price" : "Quote"}</span><span class="num">${gbp(c.total)}</span></div>
       <div><span>Deposit (${cfg.depositPct}%)</span><span class="num">${gbp(c.deposit)}</span></div>
@@ -867,7 +886,8 @@ if (typeof document !== "undefined") (function () {
     $("delBtn").hidden = !b; $("delBtn").classList.remove("armed"); $("delBtn").textContent = "Delete";
     $("f-miles").dataset.auto = b && b.distMiles != null && Math.round(b.distMiles) === +b.miles ? "1" : (!b || !+d.miles ? "1" : "");
     renderEmailHistory(b); renderJourney(b);
-    document.querySelectorAll("#form details.sec").forEach(d => d.open = !b);
+    $("form").classList.toggle("is-new", !b);
+    document.querySelectorAll("#form details.sec").forEach(d => d.open = !b && d.dataset.sec !== "money");
     updateQuote(); $("overlay").hidden = false; document.body.style.overflow = "hidden";
     $("form").scrollTop = 0;
     renderDist(b && b.distTo ? { to: b.distTo, miles: b.distMiles, mins: b.driveMins, approx: b.distApprox } : null);
@@ -1075,7 +1095,18 @@ if (typeof document !== "undefined") (function () {
     changed();
     return o;
   }
-  $("form").addEventListener("submit", e => { e.preventDefault(); if (saveForm()) toast("Saved"); });
+  $("form").addEventListener("submit", e => {
+    e.preventDefault();
+    if (!editing) {
+      // A new enquiry stays open and turns into its timeline, ready for the first reply or quote.
+      const b = saveForm(null, true); if (!b) return;
+      $("form").classList.remove("is-new");
+      document.querySelectorAll("#form details.sec").forEach(d => d.open = false);
+      $("form").scrollTop = 0; toast("Enquiry added");
+      return;
+    }
+    if (saveForm()) toast("Saved");
+  });
   $("delBtn").onclick = () => {
     const b = $("delBtn");
     if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "Tap again to delete"; setTimeout(() => { b.classList.remove("armed"); b.textContent = "Delete"; }, 3500); return; }
@@ -1185,7 +1216,7 @@ if (typeof document !== "undefined") (function () {
     const line = (l, sub, v, cls = "") => `<tr class="${cls}"><td>${l}${sub ? `<small>${sub}</small>` : ""}</td><td class="num">${v}</td></tr>`;
     const items = [line(esc(c.pkg.name || "Golf bay hire"), esc([c.pkg.hours ? c.pkg.hours + " hours" : "", c.pkg.blurb || ""].filter(Boolean).join(" · ")), gbp(c.pkg.price))];
     if (c.extra) items.push(line("Extra time", esc(b.extraHours + " hours × " + gbp(cfg.extraHour)), gbp(c.extra)));
-    if (c.travel) items.push(line("Travel", esc(`${c.travelMiles} miles beyond our ${cfg.freeMiles}-mile free radius, both ways`), gbp(c.travel)));
+    if (c.travel) items.push(line("Travel", esc(`${c.travelMiles} miles beyond our ${cfg.freeMiles}-mile free radius, each way (${c.travelMiles * 2} miles in total)`), gbp(c.travel)));
     else if (b.miles) items.push(line("Travel", esc(`${b.miles} miles each way, within our free radius`), "Included"));
     if (b.override !== "" && b.override != null && +b.override !== c.calcTotal) items.push(line(+b.override < c.calcTotal ? "Discount" : "Adjustment", "", (+b.override < c.calcTotal ? "−" : "") + gbp(Math.abs(c.calcTotal - +b.override))));
     let totals;
