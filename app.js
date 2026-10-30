@@ -1094,7 +1094,7 @@ if (typeof document !== "undefined") (function () {
   }
   function disconnect() {
     if (token && window.google && google.accounts && google.accounts.oauth2) { try { google.accounts.oauth2.revoke(token, () => { }); } catch (e) { } }
-    token = null; meta.lastSync = null; meta.account = ""; persist(); setSync("idle"); renderSettings(); toast("Disconnected. Data stays on this device and in Drive.");
+    token = null; meta.lastSync = null; meta.account = ""; meta.fileId = null; meta.folderId = null; meta.sheetId = null; meta.dirty = true; persist(); setSync("idle"); renderSettings(); toast("Disconnected. Data stays on this device and in Drive.");
   }
 
   window.addEventListener("online", () => { renderSyncPill(); if (meta.dirty) scheduleSync(); });

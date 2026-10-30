@@ -1,12 +1,12 @@
 // Offline support for Eighteen Swings CRM.
 // Bump VERSION whenever you change app files so phones pick up the new version.
-const VERSION = "es-crm-v6";
+const VERSION = "es-crm-v7";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
   "icons/icon-maskable-512.png", "icons/logo-green.png", "icons/logo-cream.png", "fonts/schola-bold.woff"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -27,7 +27,7 @@ self.addEventListener("fetch", e => {
   }
   if (url.origin !== location.origin) return;
   // App files: network first so updates arrive quickly, cache when offline.
-  e.respondWith(fetch(e.request).then(res => {
+  e.respondWith(fetch(e.request, { cache: "no-cache" }).then(res => {
     if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
     return res;
   }).catch(() => caches.match(e.request).then(hit => hit || caches.match("index.html"))));
