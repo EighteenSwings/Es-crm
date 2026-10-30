@@ -35,29 +35,43 @@
 
   <div id="notice" hidden></div>
 
-  <section class="stats" aria-label="Summary">
-    <div class="stat"><b id="sOpen">0</b><small>Open enquiries</small></div>
-    <div class="stat"><b id="sPipe">£0</b><small>Quoted, not booked</small></div>
-    <div class="stat"><b id="sBooked">£0</b><small>Booked revenue</small></div>
-    <div class="stat"><b id="sConv">–</b><small>Win rate</small></div>
-  </section>
+  <div class="stats-wrap">
+    <div class="seg stats-range" id="statRange" role="group" aria-label="Summary period">
+      <button type="button" data-srange="all" aria-pressed="true">All time</button>
+      <button type="button" data-srange="month" aria-pressed="false">This month</button>
+      <button type="button" data-srange="year" aria-pressed="false">This year</button>
+      <button type="button" data-srange="next" aria-pressed="false">Next year</button>
+      <button type="button" data-srange="last" aria-pressed="false">Last year</button>
+    </div>
+    <section class="stats" aria-label="Summary">
+      <div class="stat"><b id="sOpen">0</b><small id="sOpenL">Open enquiries</small></div>
+      <div class="stat"><b id="sPipe">£0</b><small>Quoted, not booked</small></div>
+      <div class="stat"><b id="sBooked">£0</b><small>Booked revenue</small></div>
+      <div class="stat"><b id="sConv">–</b><small>Win rate</small></div>
+    </section>
+    <p class="hint" id="sHint" hidden></p>
+  </div>
 
   <div class="bar">
     <div class="tabs" role="tablist">
-      <button role="tab" aria-selected="true" data-view="pipeline" type="button">Pipeline</button>
+      <button role="tab" aria-selected="true" data-view="todo" type="button">To do <span class="tab-badge" id="todoCount" hidden>0</span></button>
+      <button role="tab" aria-selected="false" data-view="pipeline" type="button">Pipeline</button>
       <button role="tab" aria-selected="false" data-view="upcoming" type="button">Upcoming</button>
       <button role="tab" aria-selected="false" data-view="calendar" type="button">Calendar</button>
       <button role="tab" aria-selected="false" data-view="finance" type="button">Financials</button>
+      <button role="tab" aria-selected="false" data-view="emails" type="button">Emails</button>
       <button role="tab" aria-selected="false" data-view="packages" type="button">Packages</button>
       <button role="tab" aria-selected="false" data-view="settings" type="button">Data</button>
     </div>
     <input class="search" id="q" type="search" placeholder="Search name, venue, postcode" aria-label="Search">
   </div>
 
-  <section id="view-pipeline"><div class="board"><div class="cols" id="cols"></div></div></section>
+  <section id="view-todo"></section>
+  <section id="view-pipeline" hidden><div class="board"><div class="cols" id="cols"></div></div></section>
   <section id="view-upcoming" hidden></section>
   <section id="view-calendar" hidden></section>
   <section id="view-finance" hidden></section>
+  <section id="view-emails" hidden></section>
   <section id="view-packages" hidden></section>
   <section id="view-settings" hidden></section>
 </div>
@@ -65,8 +79,9 @@
 <div class="overlay" id="overlay" hidden>
   <form class="sheet" id="form" novalidate>
     <div class="head"><h2 id="formTitle">New enquiry</h2><button class="btn ghost" type="button" id="closeBtn">Close</button></div>
+    <div id="journey" hidden></div>
 
-    <fieldset><legend>Client</legend>
+    <details class="sec" data-sec="client" open><summary>Client</summary><fieldset>
       <div class="grid2">
         <label class="f">Name<input id="f-name" required placeholder="e.g. Sophie Hart" autocomplete="off"></label>
         <label class="f">Partner or company<input id="f-partner" placeholder="e.g. Tom Ellis" autocomplete="off"></label>
@@ -75,9 +90,9 @@
         <label class="f">Source<select id="f-source"><option>Website</option><option>Instagram</option><option>TikTok</option><option>Wedding planner</option><option>Venue referral</option><option>Wedding fair</option><option>Word of mouth</option><option>Other</option></select></label>
         <label class="f">Stage<select id="f-stage"></select></label>
       </div>
-    </fieldset>
+    </fieldset></details>
 
-    <fieldset><legend>Event</legend>
+    <details class="sec" data-sec="event" open><summary>Event</summary><fieldset>
       <div class="grid2">
         <label class="f">Event date<input id="f-date" type="date"></label>
         <label class="f">Event type<select id="f-type"><option>Wedding: morning</option><option>Wedding: drinks reception</option><option>Wedding: morning + reception</option><option>Corporate</option><option>Private party</option><option>Other</option></select></label>
@@ -91,9 +106,9 @@
         <div class="dist-head"><p id="distText"></p><button class="btn ghost small" type="button" id="distUse">Use for mileage</button></div>
         <div class="dist-map" id="distMap" hidden></div>
       </div>
-    </fieldset>
+    </fieldset></details>
 
-    <fieldset><legend>Quote</legend>
+    <details class="sec" data-sec="quote" open><summary>Quote</summary><fieldset>
       <div class="grid2">
         <label class="f">Package<select id="f-package"></select></label>
         <label class="f">Extra hours<input id="f-extra" type="number" min="0" step="0.5" inputmode="decimal" value="0"></label>
@@ -101,9 +116,9 @@
         <label class="f">Agreed price override (£)<input id="f-override" type="number" min="0" inputmode="numeric" placeholder="Blank = use calculator"></label>
       </div>
       <div class="quote" id="quoteBox"></div>
-    </fieldset>
+    </fieldset></details>
 
-    <fieldset><legend>Paperwork &amp; money</legend>
+    <details class="sec" data-sec="money" open><summary>Paperwork &amp; money</summary><fieldset>
       <div class="grid2">
         <label class="check"><input type="checkbox" id="f-contract"> Contract signed</label>
         <label class="check"><input type="checkbox" id="f-deposit"> Deposit paid</label>
@@ -112,8 +127,9 @@
         <label class="f">Last contact<input id="f-contact" type="date"></label>
         <label class="f" id="lostWrap">Reason lost<input id="f-lost" placeholder="e.g. Budget, date gone"></label>
       </div>
+      <div class="email-log" id="emailLog" hidden></div>
       <label class="f">Notes<textarea id="f-notes" placeholder="Timings, access, power, what they asked about"></textarea></label>
-    </fieldset>
+    </fieldset></details>
 
     <div class="doc-actions">
       <div class="menu-wrap"><button class="btn" type="button" id="mailBtn">✉ Email</button><div class="menu" id="mailMenu" hidden></div></div>
@@ -139,6 +155,27 @@
     <p class="hint" id="mailHint"></p>
     <div class="btn-row end"><button class="btn" type="button" id="mailCopy">Copy text</button><button class="btn primary" type="button" id="mailSend">Open in email app</button></div>
   </div>
+</div>
+
+<div class="modal" id="tplView" hidden>
+  <div class="modal-card wide">
+    <div class="head"><h2 id="tplTitle">Edit template</h2><button class="btn ghost" type="button" id="tplClose">Close</button></div>
+    <div class="tpl-edit">
+      <div class="stack">
+        <label class="f">Template name<input id="tplName" placeholder="e.g. Deposit reminder"></label>
+        <label class="f">Subject<input id="tplSubject"></label>
+        <label class="f">Message<textarea id="tplBody" rows="14"></textarea></label>
+        <div><span class="hint">Tap to insert details that fill in for each client:</span><div class="toks" id="tplTokens"></div></div>
+        <label class="check"><input type="checkbox" id="tplStage"> Sending this moves a new enquiry to Quoted</label>
+      </div>
+      <div><span class="hint">Preview</span><div class="tpl-preview" id="tplPreview"></div></div>
+    </div>
+    <div class="btn-row spread"><button class="btn danger" type="button" id="tplDelete">Delete</button><button class="btn primary" type="button" id="tplSave">Save template</button></div>
+  </div>
+</div>
+
+<div class="modal" id="logView" hidden>
+  <div class="modal-card"><div class="head"><span></span><button class="btn ghost" type="button" id="logClose">Close</button></div><div id="logBody" class="log-body"></div></div>
 </div>
 
 <div class="docview" id="docView" hidden>

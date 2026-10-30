@@ -55,6 +55,16 @@ I've attached a PDF copy. If you'd like to go ahead, just reply and I'll send th
 Thanks,
 {signoff}
 {business} · {website}` },
+  { id: "followup", name: "Quote follow-up", subject: "Following up on your Eighteen Swings quote",
+    body: `Hi {first},
+
+Just checking the quote for {eventLine} reached you safely. Happy to answer any questions, or tweak the package to suit.
+
+We can only take one booking per day, so if you'd like to secure {date}, just reply and I'll send the booking form and deposit details.
+
+Thanks,
+{signoff}
+{business} · {website}` },
   { id: "confirmed", name: "Booking confirmed", subject: "You're booked in · {date}",
     body: `Hi {first},
 
@@ -376,7 +386,7 @@ if (typeof document !== "undefined") (function () {
   function changed() { meta.dirty = true; persist(); render(); scheduleSync(); }
 
   /* ----- UI helpers ----- */
-  let view = "pipeline", editing = null, query = "";
+  let view = "todo", editing = null, query = "";
   let calMonth = (() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); })();
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2600); }
   function notice(html, cls) { const n = $("notice"); if (!html) { n.hidden = true; return; } n.className = "notice " + (cls || ""); n.innerHTML = html; n.hidden = false; }
@@ -428,14 +438,37 @@ if (typeof document !== "undefined") (function () {
   setInterval(renderSyncPill, 60000);
 
   /* ----- render ----- */
-  function renderStats() {
-    const all = list();
-    $("sOpen").textContent = all.filter(b => b.stage === "new" || b.stage === "quoted").length;
-    $("sPipe").textContent = gbp(all.filter(b => b.stage === "quoted").reduce((s, b) => s + calc(b).total, 0));
-    $("sBooked").textContent = gbp(all.filter(b => WON.includes(b.stage)).reduce((s, b) => s + calc(b).total, 0));
-    const won = all.filter(b => WON.includes(b.stage)).length, lost = all.filter(b => b.stage === "lost").length;
-    $("sConv").textContent = (won + lost) ? Math.round(won / (won + lost) * 100) + "%" : "–";
+  let statRange = "all";
+  try { statRange = localStorage.getItem("es-crm-statrange") || "all"; } catch (e) { }
+  /** The app-wide period: [from, to, label]. Blank dates mean all time. */
+  function statWindow() {
+    const t = isoToday(), y = +t.slice(0, 4);
+    if (statRange === "ytd" || statRange === "year") return [y + "-01-01", y + "-12-31", "This year (" + y + ")"];
+    if (statRange === "month") return [t.slice(0, 8) + "01", t.slice(0, 8) + "31", new Date(t + "T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" })];
+    if (statRange === "next") return [(y + 1) + "-01-01", (y + 1) + "-12-31", String(y + 1)];
+    if (statRange === "last") return [(y - 1) + "-01-01", (y - 1) + "-12-31", String(y - 1)];
+    return ["", "", "All time"];
   }
+  const periodLabel = () => statWindow()[2];
+  function renderStats() {
+    const all = list(), [from, to] = statWindow();
+    const inR = d => !from || (d && d >= from && d <= to);
+    // Enquiries and quotes count by the date they came in; revenue and win rate by the event date.
+    const byCreated = all.filter(b => inR(b.created)), byEvent = all.filter(b => inR(b.date || b.created));
+    if (statRange === "all") { $("sOpen").textContent = all.filter(b => b.stage === "new" || b.stage === "quoted").length; $("sOpenL").textContent = "Open enquiries"; }
+    else { $("sOpen").textContent = byCreated.length; $("sOpenL").textContent = "Enquiries received"; }
+    $("sPipe").textContent = gbp(byCreated.filter(b => b.stage === "quoted").reduce((s, b) => s + calc(b).total, 0));
+    $("sBooked").textContent = gbp(byEvent.filter(b => WON.includes(b.stage)).reduce((s, b) => s + calc(b).total, 0));
+    const won = byEvent.filter(b => WON.includes(b.stage)).length, lost = byEvent.filter(b => b.stage === "lost").length;
+    $("sConv").textContent = (won + lost) ? Math.round(won / (won + lost) * 100) + "%" : "–";
+    document.querySelectorAll("[data-srange]").forEach(x => x.setAttribute("aria-pressed", x.dataset.srange === (statRange === "ytd" ? "year" : statRange)));
+    const h = $("sHint");
+    h.hidden = statRange === "all";
+    h.textContent = statRange === "all" ? "" : "Applies to these figures, Upcoming and Financials (the pipeline always shows everything). Enquiries and quotes count by the date they came in; booked revenue and win rate by event date.";
+  }
+  document.querySelectorAll("[data-srange]").forEach(x => x.onclick = () => {
+    statRange = x.dataset.srange; try { localStorage.setItem("es-crm-statrange", statRange); } catch (e) { } render();
+  });
   function cardHTML(b) {
     const c = calc(b), f = flags(b);
     const chips = [`<span class="chip">${esc(b.type || "Event")}</span>`].concat(b.web && b.stage === "new" ? [`<span class="chip web">Website</span>`] : []).concat(f.map(x => `<span class="chip flag">${esc(x)}</span>`));
@@ -444,21 +477,52 @@ if (typeof document !== "undefined") (function () {
       <div class="meta">${esc(fmtDate(b.date))}${b.venue ? " · " + esc(b.venue) : ""}</div>
       <div class="chips">${chips.join("")}</div></button>`;
   }
+  const PREVIEW = 2;
+  const showAll = {};
+  function rowItemHTML(b) {
+    const c = calc(b), f = flags(b);
+    const tags = (b.web && b.stage === "new" ? [`<span class="chip web">Website</span>`] : []).concat(f.map(x => `<span class="chip flag">${esc(x)}</span>`));
+    return `<button type="button" class="ri${f.length ? " needs" : ""}" data-id="${esc(b.id)}">
+      <span class="ri-who">${esc(b.name || "Unnamed")}${b.partner ? " &amp; " + esc(b.partner) : ""}</span>
+      <span class="ri-amt num">${gbp(c.total)}</span>
+      <span class="ri-meta">${esc(fmtDate(b.date))}${b.venue ? " · " + esc(b.venue) : ""}${b.type ? " · " + esc(b.type) : ""}</span>
+      ${tags.length ? `<span class="ri-tags">${tags.join("")}</span>` : ""}</button>`;
+  }
+  document.addEventListener("click", e => {
+    const m = e.target.closest("[data-more]"); if (!m) return;
+    showAll[m.dataset.more] = !showAll[m.dataset.more]; renderPipeline();
+  });
+  // Which stages are folded away. Completed and Lost start folded so the active work sits at the top.
+  let folded = { done: true, lost: true };
+  try { const f = JSON.parse(localStorage.getItem("es-crm-folded") || "null"); if (f) folded = f; } catch (e) { }
   function renderPipeline() {
     const items = list().filter(matches);
     const empty = !list().length;
     $("cols").innerHTML = STAGES.map((s, i) => {
       const col = items.filter(b => b.stage === s.id).sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
       const val = col.reduce((t, b) => t + calc(b).total, 0);
+      const need = col.filter(b => flags(b).length).length;
+      const isFolded = !!folded[s.id] && !query;
       const emptyText = s.id === "new" && empty ? "No enquiries yet. Tap “+ New enquiry” to add the first one." : "Nothing here";
-      return `<div class="col" data-stage="${s.id}"><div class="colhead"><div class="ch-top">${s.id === "lost" ? "" : `<span class="hole">${i + 1}</span>`}<h3>${s.label}</h3><span class="count">${col.length}</span></div><div class="ch-val num">${gbp(val)}</div></div>
-        ${col.length ? col.map(cardHTML).join("") : `<div class="empty-col">${emptyText}</div>`}</div>`;
+      return `<section class="col${isFolded ? " folded" : ""}" data-stage="${s.id}">
+        <button type="button" class="colhead" data-fold="${s.id}" aria-expanded="${!isFolded}">
+          <span class="ch-name">${s.id === "lost" ? "" : `<span class="hole">${i + 1}</span>`}<h3>${s.label}</h3><span class="count">${col.length}</span>${need ? `<span class="need">${need} to action</span>` : ""}</span>
+          <span class="ch-val num">${gbp(val)}</span><span class="chev" aria-hidden="true">›</span>
+        </button>
+        <div class="col-body">${col.length ? col.slice(0, showAll[s.id] || query ? col.length : PREVIEW).map(rowItemHTML).join("") + (col.length > PREVIEW && !query ? `<button type="button" class="more" data-more="${s.id}">${showAll[s.id] ? "Show fewer" : `Show all ${col.length}`}</button>` : "") : `<div class="empty-col">${emptyText}</div>`}</div></section>`;
     }).join("");
   }
+  document.addEventListener("click", e => {
+    const h = e.target.closest("[data-fold]"); if (!h) return;
+    const id = h.dataset.fold; folded[id] = !folded[id];
+    try { localStorage.setItem("es-crm-folded", JSON.stringify(folded)); } catch (err) { }
+    renderPipeline();
+  });
   function renderUpcoming() {
-    const items = list().filter(b => ["booked", "paid"].includes(b.stage) && matches(b)).sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
+    const [pf, pt, pl] = statWindow();
+    const items = list().filter(b => ["booked", "paid"].includes(b.stage) && matches(b) && (!pf || (b.date && b.date >= pf && b.date <= pt))).sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
     const el = $("view-upcoming");
-    if (!items.length) { el.innerHTML = `<div class="notice">Booked events show here in date order, with what's still outstanding for each one.</div>`; return; }
+    if (!items.length) { el.innerHTML = `<div class="notice">${pf ? "No booked events in " + esc(pl) + "." : "Booked events show here in date order, with what's still outstanding for each one."}</div>`; return; }
     el.innerHTML = `<div class="list">${items.map(b => {
       const d = b.date ? new Date(b.date + "T00:00:00") : null, u = daysUntil(b.date), c = calc(b);
       const t = (on, l) => `<span class="tick ${on ? "on" : "off"}">${on ? "✓ " : ""}${l}</span>`;
@@ -500,12 +564,8 @@ if (typeof document !== "undefined") (function () {
       <label class="f">Registered address<textarea id="b-addr" rows="2">${esc(B.address)}</textarea></label>
       <label class="f">What's included (shows on quotes)<textarea id="b-incl" rows="2">${esc(B.included)}</textarea></label>
       <label class="f">Payment note (quotes and reminder emails)<textarea id="b-pay" rows="2">${esc(B.paymentNote)}</textarea></label></div>
-      <div class="section-h"><h2>Email templates</h2><p>Words in {curly brackets} fill in automatically: {first}, {names}, {date}, {venue}, {eventLine}, {package}, {hours}, {total}, {deposit}, {balance}, {balanceDue}, {validUntil}, {time}, {signoff}, {business}, {website}.</p></div>
-      <div class="tpl-list">${T.map((t, i) => `<details class="panel tpl"><summary><b>${esc(t.name)}</b><span>${esc(t.subject)}</span></summary>
-        <label class="f">Name<input id="t-name-${i}" value="${esc(t.name)}"></label>
-        <label class="f">Subject<input id="t-subj-${i}" value="${esc(t.subject)}"></label>
-        <label class="f">Message<textarea id="t-body-${i}" rows="12">${esc(t.body)}</textarea></label></details>`).join("")}</div>
-      <div class="btn-row"><button class="btn primary" type="button" id="savePk">Save all</button><button class="btn ghost" type="button" id="resetTpl">Restore default email templates</button></div></div>`;
+      <div class="btn-row"><button class="btn primary" type="button" id="savePk">Save all</button></div>
+      <p class="hint">Email templates have their own tab: Emails.</p></div>`;
     const v = id => $(id).value.trim();
     $("savePk").onclick = () => {
       data.config = {
@@ -514,24 +574,17 @@ if (typeof document !== "undefined") (function () {
         business: { name: v("b-name") || DEFAULT_BUSINESS.name, email: v("b-email"), phone: v("b-phone"), website: v("b-web"), signoff: v("b-sign"),
           quoteValidDays: +$("r-valid").value || 30, balanceDays: +$("r-baldays").value || 0, basePostcode: v("r-base").toUpperCase() || DEFAULT_BUSINESS.basePostcode,
           legalName: v("b-legal"), companyNo: v("b-coNo"), address: v("b-addr"), bankName: v("b-bank"), accountName: v("b-acName"), sortCode: v("b-sort"), accountNo: v("b-acNo"), paymentNote: v("b-pay"), included: v("b-incl") },
-        templates: T.map((t, i) => Object.assign({}, t, { name: v("t-name-" + i) || t.name, subject: v("t-subj-" + i), body: $("t-body-" + i).value })),
+        templates: T,
         enquirySheet: cfg.enquirySheet || "",
         updated: nowISO()
       };
       if (B.basePostcode !== biz(data.config).basePostcode) baseGeo = null;
       changed(); toast("Saved"); renderPackages();
     };
-    $("resetTpl").onclick = e => {
-      const btn = e.currentTarget;
-      if (!btn.classList.contains("armed")) { btn.classList.add("armed"); btn.textContent = "Tap again to replace your edited templates"; setTimeout(() => { btn.classList.remove("armed"); btn.textContent = "Restore default email templates"; }, 4000); return; }
-      data.config = Object.assign({}, cfg, { templates: DEFAULT_TEMPLATES, updated: nowISO() }); changed(); renderPackages(); toast("Templates restored");
-    };
   }
-  let finRange = "year";
   function renderFinance() {
-    const el = $("view-finance"), t = new Date(), y = t.getFullYear();
-    const ranges = { year: [y + "-01-01", y + "-12-31", "This year (" + y + ")"], next: [y + 1 + "-01-01", y + 1 + "-12-31", String(y + 1)], last: [y - 1 + "-01-01", y - 1 + "-12-31", String(y - 1)], all: ["", "", "All time"] };
-    const [from, to] = ranges[finRange];
+    const el = $("view-finance");
+    const [from, to, plabel] = statWindow();
     const f = financials(data.bookings, data.config, from, to);
     const pct = x => x == null ? "–" : Math.round(x * 100) + "%";
     const tile = (v, l, sub) => `<div class="stat"><b>${v}</b><small>${l}</small>${sub ? `<span class="sub">${sub}</span>` : ""}</div>`;
@@ -539,14 +592,15 @@ if (typeof document !== "undefined") (function () {
       ${rows.map(r => `<tr><td>${esc(r.key)}</td><td class="num">${r.enquiries}</td><td class="num">${r.won}</td><td class="num">${pct(r.rate)}</td><td class="num">${r.won ? gbp(r.avg) : "–"}</td><td class="num">${gbp(r.revenue)}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">Nothing yet.</p>`}</div>`;
     // month bars: Jan-Dec of the chosen year, or the months that have data for all time
     let months = f.byMonth;
-    if (from) { const yy = from.slice(0, 4); months = Array.from({ length: 12 }, (_, i) => { const k = yy + "-" + String(i + 1).padStart(2, "0"); return { month: k, revenue: (f.byMonth.find(m => m.month === k) || {}).revenue || 0 }; }); }
+    const thisMonth = statRange === "month" ? from.slice(0, 7) : "";
+    if (from) { const yy = from.slice(0, 4); const fy = financials(data.bookings, data.config, yy + "-01-01", yy + "-12-31"); months = Array.from({ length: 12 }, (_, i) => { const k = yy + "-" + String(i + 1).padStart(2, "0"); return { month: k, revenue: (fy.byMonth.find(m => m.month === k) || {}).revenue || 0 }; }); }
     const maxM = Math.max(1, ...months.map(m => m.revenue));
-    const bars = months.length ? `<div class="bars">${months.map(m => `<div class="bar-col" title="${esc(new Date(m.month + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }))}: ${gbp(m.revenue)}">
+    const bars = months.length ? `<div class="bars">${months.map(m => `<div class="bar-col${thisMonth && m.month !== thisMonth ? " dim" : ""}" title="${esc(new Date(m.month + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }))}: ${gbp(m.revenue)}">
         <span class="bv num">${m.revenue ? (m.revenue >= 1000 ? "£" + (m.revenue / 1000).toFixed(1).replace(/\.0$/, "") + "k" : gbp(m.revenue)) : ""}</span><i style="height:${Math.round(m.revenue / maxM * 100)}%"></i><span class="bl">${new Date(m.month + "-01T00:00:00").toLocaleDateString("en-GB", { month: "short" })}${from ? "" : " " + m.month.slice(2, 4)}</span></div>`).join("")}</div>` : `<p class="muted">No booked events yet.</p>`;
     const maxD = Math.max(1, ...f.byDow);
     const dows = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     el.innerHTML = `<div class="stack">
-      <div class="section-h"><h2>Financials</h2><div class="seg">${Object.entries(ranges).map(([k, r]) => `<button type="button" data-range="${k}" aria-pressed="${k === finRange}">${esc(r[2])}</button>`).join("")}</div></div>
+      <div class="section-h"><h2>Financials · ${esc(plabel)}</h2><p>Change the period with the buttons at the top of the app.</p></div>
       <p class="hint">Booked means Booked, Paid in full or Completed, counted by event date. Figures use the quote on each booking, including any agreed price.</p>
       <section class="stats fin">${tile(gbp(f.revenue), "Booked revenue", f.bookings + (f.bookings === 1 ? " booking" : " bookings"))}${tile(f.bookings ? gbp(f.avgSale) : "–", "Average sale", f.bookings ? "Median " + gbp(f.medianSale) : "")}
         ${tile(gbp(f.received), "Cash received", "Deposits and balances ticked")}${tile(gbp(f.outstanding), "Still to collect", "")}
@@ -562,8 +616,86 @@ if (typeof document !== "undefined") (function () {
         <div class="panel"><h3>Busiest days</h3><div class="hbars">${f.byDow.map((n, i) => `<div><span>${dows[i]}</span><i style="width:${Math.round(n / maxD * 100)}%"></i><b class="num">${n}</b></div>`).join("")}</div>
           <h3 style="margin-top:8px">Why enquiries were lost</h3>${f.lostReasons.length ? `<div class="hbars">${f.lostReasons.map(([r, n]) => `<div><span>${esc(r)}</span><i style="width:${Math.round(n / f.lostReasons[0][1] * 100)}%"></i><b class="num">${n}</b></div>`).join("")}</div>` : `<p class="muted">No lost enquiries in this period.</p>`}</div>
       </div></div>`;
-    el.querySelectorAll("[data-range]").forEach(b => b.onclick = () => { finRange = b.dataset.range; renderFinance(); });
   }
+  /* ----- Emails tab ----- */
+  const TOKENS = [["first", "First name"], ["names", "Both names"], ["date", "Event date"], ["eventLine", "Event, date and venue"], ["venue", "Venue"], ["time", "Start time"],
+    ["package", "Package"], ["hours", "Hours"], ["total", "Total"], ["deposit", "Deposit"], ["balance", "Balance"], ["balanceDue", "Balance due date"], ["validUntil", "Quote valid until"],
+    ["signoff", "Your name"], ["business", "Business name"], ["website", "Website"], ["paymentNote", "Payment note"]];
+  function sampleBooking() {
+    const real = list().filter(b => b.name && b.date && b.stage !== "lost").sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")))[0];
+    return real || { id: "sample", name: "Sophie Hart", partner: "Tom Ellis", date: addDays(isoToday(), 200), time: "13:00", venue: "Hartpury House", type: "Wedding: drinks reception",
+      package: (data.config.packages[0] || {}).id, extraHours: 0, miles: 0, override: "", created: isoToday() };
+  }
+  function sentLog() {
+    const out = [];
+    for (const b of list()) for (const e of (b.emails || [])) out.push(Object.assign({ who: b.name, id: b.id }, e));
+    return out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  }
+  function renderEmails() {
+    const T = templatesOf(data.config), sb = sampleBooking(), log = sentLog().slice(0, 15);
+    $("view-emails").innerHTML = `<div class="stack">
+      <div class="section-h"><h2>Email templates</h2><button class="btn primary" type="button" id="tplNew">+ New template</button></div>
+      <p class="hint">Previews are filled in with ${sb.id === "sample" ? "an example booking" : "your most recent booking (" + esc(sb.name) + ")"}. To send one, open a booking and tap Email.</p>
+      <div class="tpl-grid">${T.map(t => `<article class="panel tplc">
+        <div class="tplc-head"><h3>${esc(t.name)}</h3>${t.stageTo ? `<span class="chip">Moves to Quoted</span>` : ""}</div>
+        <div class="tplc-subj">${esc(fillTemplate(t.subject, sb, data.config, isoToday()))}</div>
+        <div class="tplc-body">${esc(fillTemplate(t.body, sb, data.config, isoToday()))}</div>
+        <div class="btn-row"><button class="btn" type="button" data-tpl-edit="${esc(t.id)}">Edit</button></div></article>`).join("")}</div>
+      <div class="section-h"><h2>Recently sent</h2></div>
+      ${log.length ? `<div class="list">${log.map(e => `<button type="button" class="row sent" data-id="${esc(e.id)}"><div class="date"><b>${new Date(e.at).getDate()}</b><span>${new Date(e.at).toLocaleDateString("en-GB", { month: "short" })}</span></div>
+        <div style="min-width:0"><div class="who">${esc(e.who || "")}</div><div class="meta">${esc(e.tpl || "")} · ${esc(e.subject || "")}</div></div><div class="checks"><span class="tick">${esc(ago(e.at))}</span></div></button>`).join("")}</div>`
+        : `<div class="notice">Emails you send from a booking show here, and in that booking's history.</div>`}
+      <div class="btn-row"><button class="btn ghost" type="button" id="tplReset">Restore the original templates</button></div></div>`;
+    $("tplNew").onclick = () => openTplEditor(null);
+    $("view-emails").querySelectorAll("[data-tpl-edit]").forEach(b => b.onclick = () => openTplEditor(b.dataset.tplEdit));
+    $("tplReset").onclick = e => {
+      const btn = e.currentTarget;
+      if (!btn.classList.contains("armed")) { btn.classList.add("armed"); btn.textContent = "Tap again: this replaces your edits"; setTimeout(() => { btn.classList.remove("armed"); btn.textContent = "Restore the original templates"; }, 4000); return; }
+      data.config = Object.assign({}, data.config, { templates: DEFAULT_TEMPLATES, updated: nowISO() }); changed(); renderEmails(); toast("Original templates restored");
+    };
+  }
+  let tplEditing = null, tplLastField = null;
+  function openTplEditor(id) {
+    const T = templatesOf(data.config);
+    tplEditing = id ? T.find(t => t.id === id) : null;
+    const t = tplEditing || { name: "", subject: "", body: "Hi {first},\n\n\n\nThanks,\n{signoff}\n{business} · {website}" };
+    $("tplTitle").textContent = tplEditing ? "Edit template" : "New template";
+    $("tplName").value = t.name; $("tplSubject").value = t.subject; $("tplBody").value = t.body;
+    $("tplStage").checked = !!t.stageTo;
+    $("tplDelete").hidden = !tplEditing; $("tplDelete").classList.remove("armed"); $("tplDelete").textContent = "Delete";
+    $("tplTokens").innerHTML = TOKENS.map(([k, l]) => `<button type="button" class="tok" data-tok="${k}" title="{${k}}">${esc(l)}</button>`).join("");
+    tplLastField = $("tplBody");
+    updateTplPreview(); $("tplView").hidden = false;
+  }
+  function updateTplPreview() {
+    const sb = sampleBooking();
+    $("tplPreview").innerHTML = `<div class="tplc-subj">${esc(fillTemplate($("tplSubject").value, sb, data.config, isoToday()))}</div><div class="tplc-body">${esc(fillTemplate($("tplBody").value, sb, data.config, isoToday()))}</div>`;
+  }
+  ["tplSubject", "tplBody"].forEach(id => { $(id).addEventListener("input", updateTplPreview); $(id).addEventListener("focus", () => tplLastField = $(id)); });
+  $("tplTokens").addEventListener("click", e => {
+    const k = e.target.closest("[data-tok]"); if (!k) return;
+    const f = tplLastField || $("tplBody"), ins = "{" + k.dataset.tok + "}";
+    const st = f.selectionStart ?? f.value.length, en = f.selectionEnd ?? f.value.length;
+    f.value = f.value.slice(0, st) + ins + f.value.slice(en); f.focus(); f.selectionStart = f.selectionEnd = st + ins.length; updateTplPreview();
+  });
+  $("tplClose").onclick = () => $("tplView").hidden = true;
+  $("tplSave").onclick = () => {
+    const name = $("tplName").value.trim(), subject = $("tplSubject").value.trim(), body = $("tplBody").value;
+    if (!name) { $("tplName").focus(); toast("Give the template a name"); return; }
+    const T = templatesOf(data.config).slice();
+    const t = { id: tplEditing ? tplEditing.id : "tpl-" + uid().slice(0, 8), name, subject, body };
+    if ($("tplStage").checked) t.stageTo = "quoted";
+    const i = T.findIndex(x => x.id === t.id); if (i >= 0) T[i] = t; else T.push(t);
+    data.config = Object.assign({}, data.config, { templates: T, updated: nowISO() });
+    $("tplView").hidden = true; changed(); renderEmails(); toast("Template saved");
+  };
+  $("tplDelete").onclick = e => {
+    const btn = e.currentTarget;
+    if (!btn.classList.contains("armed")) { btn.classList.add("armed"); btn.textContent = "Tap again to delete"; setTimeout(() => { btn.classList.remove("armed"); btn.textContent = "Delete"; }, 3500); return; }
+    data.config = Object.assign({}, data.config, { templates: templatesOf(data.config).filter(t => t.id !== tplEditing.id), updated: nowISO() });
+    $("tplView").hidden = true; changed(); renderEmails(); toast("Template deleted");
+  };
+
   function renderCalendar() {
     const el = $("view-calendar");
     const y = calMonth.getFullYear(), m = calMonth.getMonth();
@@ -666,7 +798,9 @@ if (typeof document !== "undefined") (function () {
     if (view === "pipeline") renderPipeline();
     if (view === "upcoming") renderUpcoming();
     if (view === "calendar") renderCalendar();
+    if (view === "todo") renderTodo(); else { try { renderTodoBadge(); } catch (e) { } }
     if (view === "finance") renderFinance();
+    if (view === "emails") renderEmails();
     renderSyncPill();
   }
 
@@ -674,14 +808,15 @@ if (typeof document !== "undefined") (function () {
   document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
     view = b.dataset.view;
     document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
-    ["pipeline", "upcoming", "calendar", "finance", "packages", "settings"].forEach(v => $("view-" + v).hidden = v !== view);
-    $("q").hidden = view === "packages" || view === "settings" || view === "finance";
+    ["todo", "pipeline", "upcoming", "calendar", "finance", "emails", "packages", "settings"].forEach(v => $("view-" + v).hidden = v !== view);
+    $("q").hidden = ["packages", "settings", "finance", "emails"].includes(view);
+    try { localStorage.setItem("es-crm-view", view); } catch (e) { }
     if (view === "packages") renderPackages();
     if (view === "settings") renderSettings();
     render();
   });
   $("q").addEventListener("input", e => { query = e.target.value.trim().toLowerCase(); render(); });
-  document.addEventListener("click", e => { const c = e.target.closest(".card,.row,.ev"); if (c && c.dataset.id) openForm(data.bookings[c.dataset.id]); });
+  document.addEventListener("click", e => { const c = e.target.closest(".card,.row,.ev,.ri"); if (c && c.dataset.id) openForm(data.bookings[c.dataset.id]); });
   $("syncPill").onclick = () => { if (!CFG.googleClientId) { document.querySelector('[data-view="settings"]').click(); return; } sync(true); };
 
   /* ----- form ----- */
@@ -700,6 +835,8 @@ if (typeof document !== "undefined") (function () {
     o.id = editing ? editing.id : "";
     o.created = editing ? editing.created : isoToday();
     if (editing && editing.web) o.web = true;
+    if (editing && editing.emails) o.emails = editing.emails;
+    if (editing && editing.activity) o.activity = editing.activity;
     return o;
   }
   function updateQuote() {
@@ -729,11 +866,189 @@ if (typeof document !== "undefined") (function () {
     $("formTitle").textContent = b ? (b.name || "Enquiry") : "New enquiry";
     $("delBtn").hidden = !b; $("delBtn").classList.remove("armed"); $("delBtn").textContent = "Delete";
     $("f-miles").dataset.auto = b && b.distMiles != null && Math.round(b.distMiles) === +b.miles ? "1" : (!b || !+d.miles ? "1" : "");
+    renderEmailHistory(b); renderJourney(b);
+    document.querySelectorAll("#form details.sec").forEach(d => d.open = !b);
     updateQuote(); $("overlay").hidden = false; document.body.style.overflow = "hidden";
     $("form").scrollTop = 0;
     renderDist(b && b.distTo ? { to: b.distTo, miles: b.distMiles, mins: b.driveMins, approx: b.distApprox } : null);
     if (d.postcode) lookupDistance(d.postcode, false);
     if (!b) setTimeout(() => $("f-name").focus(), 60);
+  }
+  /* ----- booking journey: the booking as a timeline, top to bottom, with the next actions on each step ----- */
+  const STAGE_I = { new: 0, quoted: 1, booked: 2, paid: 3, done: 4, lost: -1 };
+  function emailed(b, id) {
+    const t = templatesOf(data.config).find(x => x.id === id);
+    const hits = (b.emails || []).filter(e => e.tplId === id || (t && e.tpl === t.name));
+    return hits.length ? hits[hits.length - 1].at : "";
+  }
+  const shortD = iso => iso ? new Date(iso.length > 10 ? iso : iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
+  function renderJourney(b) {
+    const el = $("journey");
+    if (!b) { el.hidden = true; el.innerHTML = ""; return; }
+    const c = calc(b), cfg = data.config, si = STAGE_I[b.stage] ?? 0, lost = b.stage === "lost";
+    const paid = b.balance || si >= 3 ? c.total : b.deposit ? c.deposit : 0, owed = c.total - paid;
+    const u = daysUntil(b.date), due = balanceDueDate(b, cfg), dueIn = daysUntil(due);
+    const stageName = (STAGES.find(s => s.id === b.stage) || {}).label || "";
+    const btn = (label, act, arg, kind) => `<button type="button" class="jb${kind ? " " + kind : ""}" data-act="${act}"${arg ? ` data-arg="${esc(arg)}"` : ""}>${label}</button>`;
+    const sent = (id, label) => { const d = emailed(b, id); return d ? `<button type="button" class="jdone" data-log="email" data-arg="${esc(id)}">✓ ${label} sent ${esc(shortD(d))}</button>` : ""; };
+    const doneBtn = (key, label) => `<button type="button" class="jb on" data-log="act" data-arg="${key}">✓ ${label}</button>`;
+    const mailBtn = (id, label, kind) => emailed(b, id) ? sent(id, label) + btn("Send again", "mail", id, "ghost") : btn("✉ " + label, "mail", id, kind);
+    const steps = [];
+    // 1. Enquiry
+    steps.push({ st: "done", title: "Enquiry received", when: shortD(b.created), sub: [b.source, b.guests ? "about " + b.guests + " guests" : ""].filter(Boolean).join(" · "),
+      acts: si === 0 ? mailBtn("reply", "Enquiry reply", "primary") : sent("reply", "Reply") });
+    // 2. Quote
+    const chaseDue = b.stage === "quoted" && (daysSince(b.lastContact || b.created) ?? 0) >= 4;
+    steps.push({ st: si >= 1 ? (si === 1 ? "now" : "done") : "next", title: si >= 1 ? "Quoted " + gbp(c.total) : "Send a quote", when: si >= 1 ? shortD(b.lastContact) : "",
+      sub: `${esc(c.pkg.name || "")}${c.hours ? " · " + c.hours + "h" : ""}${c.travel ? " · travel " + gbp(c.travel) : ""}`,
+      warn: chaseDue ? "No reply for " + daysSince(b.lastContact || b.created) + " days. Time to chase." : "",
+      acts: si >= 2 ? sent("quote", "Quote") + sent("followup", "Follow-up") : si <= 1 && !lost ? btn("Quote PDF", "doc", "quote") + mailBtn("quote", "Email quote", si === 0 ? "primary" : "") + (si === 1 ? mailBtn("followup", "Follow-up", chaseDue ? "primary" : "") + btn("Mark as booked", "stage", "booked", "ok") : "") : "" });
+    // 3. Booking secured
+    const booked = si >= 2;
+    steps.push({ st: booked ? (b.contract && b.deposit ? "done" : "now") : "next", title: "Booking secured", when: "",
+      sub: booked ? `Contract ${b.contract ? "signed" : "not signed yet"} · Deposit ${gbp(c.deposit)} ${b.deposit ? "paid" : "due"}` : `${cfg.depositPct}% deposit of ${gbp(c.deposit)} secures the date`,
+      acts: booked ? (b.contract ? doneBtn("contract", "Contract signed") : btn("Contract signed", "toggle", "contract")) + (b.deposit ? doneBtn("deposit", "Deposit paid") : btn("Deposit invoice", "doc", "deposit") + btn("Deposit paid", "toggle", "deposit")) + mailBtn("confirmed", "Booking confirmed", b.deposit ? "primary" : "") : "" });
+    // 4. Balance
+    const balDone = b.balance || si >= 3;
+    steps.push({ st: balDone ? "done" : booked ? (dueIn !== null && dueIn <= 7 ? "now" : "next") : "next", title: balDone ? "Paid in full" : "Balance " + gbp(c.balance), when: due ? "due " + shortD(due) : "",
+      warn: !balDone && booked && dueIn !== null && dueIn < 0 ? "Overdue by " + (-dueIn) + " days" : "",
+      acts: balDone && booked ? doneBtn("balance", "Paid in full") + sent("balance", "Reminder") : booked && !balDone ? btn("Balance invoice", "doc", "balance") + mailBtn("balance", "Balance reminder", dueIn !== null && dueIn <= 7 ? "primary" : "") + btn("Balance paid", "toggle", "balance") : "" });
+    // 5. Final details
+    const fd = b.date ? addDays(b.date, -7) : "";
+    steps.push({ st: emailed(b, "final") ? "done" : booked && u !== null && u <= 10 && u >= 0 ? "now" : "next", title: "Final details", when: fd ? "around " + shortD(fd) : "",
+      sub: "Timings, where the bay goes, power, a contact on the day", acts: booked ? mailBtn("final", "Final details") : sent("final", "Final details") });
+    // 6. Event day
+    steps.push({ st: u !== null && u < 0 ? "done" : u === 0 ? "now" : "next", title: "Event day", when: b.date ? shortD(b.date) + (b.time ? " · " + b.time : "") : "date TBC",
+      sub: [b.venue, b.postcode, b.distMiles != null ? Math.round(b.distMiles) + " miles away" : ""].filter(Boolean).map(esc).join(" · ") });
+    // 7. Follow-up
+    const after = u !== null && u < 0;
+    steps.push({ st: si === 4 && b.review ? "done" : after && booked ? "now" : "next", title: "Thank you & review", when: "",
+      sub: "Thank them, ask for a review and any photos",
+      acts: after && booked ? mailBtn("review", "Thank you email", "primary") + (b.review ? doneBtn("review", "Review asked") : btn("Review asked", "toggle", "review")) + (si < 4 ? btn("Mark completed", "stage", "done", "ok") : "") : "" });
+    const cur = lost ? -1 : steps.findIndex(x => x.st === "now" || x.st === "next");
+    el.innerHTML = `<div class="jsum">
+        <div><span class="jstage st-${esc(b.stage)}">${esc(stageName)}</span>${b.date ? `<span class="jwhen">${esc(fmtDate(b.date))}${u !== null ? ` · ${u < 0 ? "past" : u === 0 ? "today" : "in " + u + " days"}` : ""}</span>` : ""}</div>
+        <div class="jmoney"><div><b class="num">${gbp(c.total)}</b><small>Total</small></div><div><b class="num">${gbp(paid)}</b><small>Paid</small></div><div><b class="num${owed && si >= 2 ? " owe" : ""}">${gbp(owed)}</b><small>To pay</small></div></div>
+      </div>
+      ${lost ? `<div class="warn">Marked as lost${b.lost ? ": " + esc(b.lost) : ""}. ${btn("Reopen", "stage", "new", "ghost")}</div>` : ""}
+      <ol class="jline">${steps.map((x, i) => `<li class="js ${x.st}${i === cur ? " cur" : ""}"><span class="dot" aria-hidden="true">${x.st === "done" ? "✓" : ""}</span>
+        <div class="jbody"><div class="jt"><b>${x.title}</b>${x.when ? `<span>${esc(x.when)}</span>` : ""}</div>
+        ${x.sub ? `<div class="jsub">${x.sub}</div>` : ""}${x.warn ? `<div class="jwarn">${esc(x.warn)}</div>` : ""}
+        ${x.acts && !lost ? `<div class="jacts">${x.acts}</div>` : ""}</div></li>`).join("")}</ol>
+      ${!lost && si < 2 ? `<div class="jfoot">${btn("Mark as lost", "lost", "", "ghost")}</div>` : ""}`;
+    el.hidden = false;
+  }
+  $("journey").addEventListener("click", e => {
+    const l = e.target.closest("[data-log]");
+    if (l) { showLog(l.dataset.log, l.dataset.arg); return; }
+    const a = e.target.closest("[data-act]"); if (!a) return;
+    runAct(a.dataset.act, a.dataset.arg);
+  });
+  /** Popup showing an email that was sent, or when an action was done (with Undo). */
+  function showLog(kind, arg, idx) {
+    const b = editing; if (!b) return;
+    let html = "";
+    if (kind === "email") {
+      const t = templatesOf(data.config).find(x => x.id === arg);
+      const list2 = (b.emails || []).filter(e => e.tplId === arg || (t && e.tpl === t.name));
+      const e = idx != null ? (b.emails || [])[idx] : list2[list2.length - 1]; if (!e) return;
+      const dt = new Date(e.at).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      html = `<h2>${esc(e.tpl || "Email")}</h2><dl class="kv"><dt>Sent</dt><dd>${esc(dt)}</dd>${e.to ? `<dt>To</dt><dd>${esc(e.to)}</dd>` : ""}<dt>Subject</dt><dd>${esc(e.subject || "")}</dd></dl>
+        ${e.body ? `<div class="tpl-preview"><div class="tplc-body">${esc(e.body)}</div></div>` : `<p class="hint">This email was sent before the app started keeping copies, so only the subject was saved.</p>`}
+        ${list2.length > 1 && idx == null ? `<p class="hint">Sent ${list2.length} times. This is the latest.</p>` : ""}`;
+    } else {
+      const names = { contract: "Contract signed", deposit: "Deposit paid", balance: "Balance paid", review: "Review asked" };
+      const hits = (b.activity || []).filter(x => x.key === arg);
+      const last = hits[hits.length - 1];
+      html = `<h2>${esc(names[arg] || arg)}</h2>${last ? `<p>Marked ${esc(new Date(last.at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }))}.</p>` : `<p class="hint">Ticked before the app started recording dates.</p>`}
+        ${hits.length > 1 ? `<ul class="hist">${hits.slice().reverse().map(x => `<li>${esc(x.what)} · ${esc(new Date(x.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))}</li>`).join("")}</ul>` : ""}
+        <div class="btn-row"><button type="button" class="btn danger" id="logUndo">Undo this</button></div>`;
+    }
+    $("logBody").innerHTML = html; $("logView").hidden = false;
+    const u = $("logUndo"); if (u) u.onclick = () => { $("logView").hidden = true; runAct("toggle", arg); };
+  }
+  $("logClose").onclick = () => $("logView").hidden = true;
+  $("logView").addEventListener("click", e => { if (e.target.id === "logView") $("logView").hidden = true; });
+  $("emailLog").addEventListener("click", e => { const r = e.target.closest("[data-log-i]"); if (r) showLog("email", "", +r.dataset.logI); });
+  /** Run a booking action on the booking open in the form. */
+  function runAct(act, arg) {
+    if (act === "open") return;
+    if (act === "mail") openMail(arg);
+    else if (act === "doc") openDoc(arg);
+    else if (act === "toggle") {
+      const now = !$("f-" + arg).checked, patch = { [arg]: now };
+      if (arg === "balance" && now && $("f-stage").value === "booked") { patch.stage = "paid"; patch.deposit = true; }
+      if (arg === "deposit" && now && ["new", "quoted"].includes($("f-stage").value)) patch.stage = "booked";
+      const names = { contract: "Contract signed", deposit: "Deposit paid", balance: "Balance paid", review: "Review asked" };
+      patch.activity = ((editing && editing.activity) || []).concat([{ key: arg, what: (now ? "" : "Undone: ") + names[arg], at: nowISO() }]);
+      saveForm(patch, true); toast(now ? "Updated" : "Unticked");
+    } else if (act === "stage") { saveForm({ stage: arg, activity: ((editing && editing.activity) || []).concat([{ key: "stage-" + arg, what: "Moved to " + ((STAGES.find(s => s.id === arg) || {}).label || arg), at: nowISO() }]) }, true); toast("Moved to " + ((STAGES.find(s => s.id === arg) || {}).label || arg)); }
+    else if (act === "lost") { saveForm({ stage: "lost" }, true); const d = document.querySelector('[data-sec="money"]'); d.open = true; setTimeout(() => { $("f-lost").focus(); $("f-lost").scrollIntoView({ block: "center" }); }, 50); toast("Add a reason below if you know it"); }
+  }
+
+  /* ----- To do: every action across all bookings, most urgent first ----- */
+  function actionsFor(b) {
+    const out = [], today = isoToday(), si = STAGE_I[b.stage] ?? 0, c = calc(b);
+    if (b.stage === "lost") return out;
+    const add = (key, label, due, act, arg, actLabel) => out.push({ b, key, label, due, act, arg, actLabel });
+    const u = daysUntil(b.date);
+    if (clashesFor(b, list()).hard.length && si <= 1) add("clash", "Date already booked by someone else", today, "open", "", "Open");
+    if (b.stage === "new") add("reply", emailed(b, "reply") ? "Send a quote" : "Reply to new enquiry", addDays(b.created || today, 1), "mail", emailed(b, "reply") ? "quote" : "reply", emailed(b, "reply") ? "Email quote" : "Send reply");
+    if (b.stage === "quoted") add("chase", "Chase the quote", addDays(b.lastContact || b.created || today, 4), "mail", "followup", "Send follow-up");
+    if (b.stage === "booked") {
+      if (!b.deposit) add("deposit", "Deposit of " + gbp(c.deposit) + " not paid", today, "doc", "deposit", "Deposit invoice");
+      if (!b.contract) add("contract", "Contract not signed", today, "toggle", "contract", "Mark signed");
+      if (!b.balance && b.date) add("balance", "Balance of " + gbp(c.balance) + " due", balanceDueDate(b, data.config), "mail", "balance", "Send reminder");
+    }
+    if (si >= 2 && b.date && u !== null && u >= 0 && !emailed(b, "final")) add("final", "Send final details", addDays(b.date, -7), "mail", "final", "Final details");
+    if (si >= 2 && u !== null && u >= 0 && u <= 2) add("event", u === 0 ? "Event today" + (b.time ? " at " + b.time : "") : u === 1 ? "Event tomorrow" : "Event in 2 days", today, "open", "", "Open");
+    if (si >= 2 && u !== null && u < 0) {
+      if (!emailed(b, "review")) add("review", "Send thank you and ask for a review", addDays(b.date, 1), "mail", "review", "Thank you email");
+      if (si < 4 && (b.balance || si === 3)) add("done", "Mark as completed", addDays(b.date, 2), "stage", "done", "Mark completed");
+      if (!b.balance && si === 2) add("unpaid", "Event's happened but the balance isn't marked paid", b.date, "toggle", "balance", "Balance paid");
+    }
+    return out;
+  }
+  function renderTodoBadge() {
+    const today = isoToday(), n = [].concat(...list().map(actionsFor)).filter(a => a.due <= today).length, badge = $("todoCount");
+    if (badge) { badge.textContent = n; badge.hidden = !n; }
+  }
+  function renderTodo() {
+    const today = isoToday(), horizon = addDays(today, 14), wk = addDays(today, 7);
+    // One card per booking, filed under its most urgent action, listing everything it needs.
+    const per = list().filter(matches).map(b => ({ b, acts: actionsFor(b).filter(a => a.due <= horizon).sort((x, y) => x.due.localeCompare(y.due)) })).filter(x => x.acts.length);
+    per.sort((x, y) => x.acts[0].due.localeCompare(y.acts[0].due));
+    const bucket = d => d < today ? 0 : d === today ? 1 : d <= wk ? 2 : 3;
+    const names = ["Overdue", "Today", "Next 7 days", "Coming up"];
+    const when = due => { const d = daysUntil(due); return d < 0 ? (-d === 1 ? "1 day late" : -d + " days late") : d === 0 ? "today" : d === 1 ? "tomorrow" : "in " + d + " days"; };
+    const el = $("view-todo");
+    const total = per.reduce((n, x) => n + x.acts.length, 0);
+    el.innerHTML = per.length ? `<div class="stack">${names.map((name, gi) => {
+        const items = per.filter(x => bucket(x.acts[0].due) === gi); if (!items.length) return "";
+        return `<section class="todo-g${gi === 0 ? " late" : ""}"><div class="todo-h"><h3>${name}</h3><span class="count">${items.length}</span></div>
+          ${items.map(({ b, acts }) => `<article class="todo-card">
+            <button type="button" class="todo-who" data-todo-open="${esc(b.id)}"><b>${esc(b.name || "Unnamed")}${b.partner ? " &amp; " + esc(b.partner) : ""}</b><span>${b.date ? esc(fmtDate(b.date)) : "Date TBC"}${b.venue ? " · " + esc(b.venue) : ""} ›</span></button>
+            ${acts.map(a => `<div class="todo">
+              <div class="todo-main"><span class="todo-what">${esc(a.label)}</span><span class="todo-when${a.due < today ? " late" : ""}">${esc(when(a.due))}</span></div>
+              ${a.act !== "open" ? `<button type="button" class="jb${a.due <= today ? " primary" : ""}" data-todo-act="${esc(a.act)}" data-todo-arg="${esc(a.arg)}" data-todo-id="${esc(b.id)}">${esc(a.actLabel)}</button>` : ""}
+            </div>`).join("")}</article>`).join("")}</section>`;
+      }).join("")}
+      <p class="hint">${total} ${total === 1 ? "thing" : "things"} to do across ${per.length} ${per.length === 1 ? "booking" : "bookings"}, covering anything due in the next two weeks. Tap a name to open the booking.</p></div>`
+      : `<div class="todo-empty"><b>All caught up.</b><span>Nothing needs doing in the next two weeks.</span></div>`;
+    renderTodoBadge();
+  }
+  document.addEventListener("click", e => {
+    const o = e.target.closest("[data-todo-open]");
+    if (o) { openForm(data.bookings[o.dataset.todoOpen]); return; }
+    const a = e.target.closest("[data-todo-act]"); if (!a) return;
+    const b = data.bookings[a.dataset.todoId]; if (!b) return;
+    openForm(b); runAct(a.dataset.todoAct, a.dataset.todoArg);
+  });
+
+  function renderEmailHistory(b) {
+    const em = (b && b.emails) || [], el = $("emailLog");
+    el.innerHTML = em.length ? `<span class="lbl">Emails sent</span>` + em.map((e, i) => `<button type="button" data-log-i="${i}"><span>${esc(e.tpl)}</span><span class="muted">${esc(new Date(e.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }))} ›</span></button>`).reverse().join("") : "";
+    el.hidden = !em.length;
   }
   function closeForm() { $("overlay").hidden = true; document.body.style.overflow = ""; editing = null; dist = null; }
   $("addBtn").onclick = () => openForm(null);
@@ -755,7 +1070,7 @@ if (typeof document !== "undefined") (function () {
     o.created = editing ? (editing.created || isoToday()) : isoToday();
     o.updated = nowISO();
     data.bookings[o.id] = o;
-    if (keepOpen) { editing = o; $("delBtn").hidden = false; $("formTitle").textContent = o.name; F.forEach(k => { const v = o[KEY[k] || k]; if (v != null) $("f-" + k).value = v; }); ["contract", "deposit", "balance", "review"].forEach(k => $("f-" + k).checked = !!o[k]); updateQuote(); }
+    if (keepOpen) { editing = o; renderEmailHistory(o); renderJourney(o); $("delBtn").hidden = false; $("formTitle").textContent = o.name; F.forEach(k => { const v = o[KEY[k] || k]; if (v != null) $("f-" + k).value = v; }); ["contract", "deposit", "balance", "review"].forEach(k => $("f-" + k).checked = !!o[k]); updateQuote(); }
     else closeForm();
     changed();
     return o;
@@ -912,14 +1227,18 @@ if (typeof document !== "undefined") (function () {
   $("mailBtn").onclick = () => { fillMailMenu(); const m = $("mailMenu"); m.hidden = !m.hidden; $("invMenu").hidden = true; };
   $("mailMenu").addEventListener("click", e => {
     const k = e.target.closest("[data-tpl]"); if (!k) return; $("mailMenu").hidden = true;
+    openMail(k.dataset.tpl);
+  });
+  function openMail(tplId) {
     const b = saveForm(null, true); if (!b) return;
-    mailTpl = templatesOf(data.config).find(t => t.id === k.dataset.tpl);
+    mailTpl = templatesOf(data.config).find(t => t.id === tplId) || DEFAULT_TEMPLATES.find(t => t.id === tplId);
+    if (!mailTpl) { toast("That template has been deleted. Check the Emails tab."); return; }
     $("mailTo").value = b.email || "";
     $("mailSubject").value = fillTemplate(mailTpl.subject, b, data.config, isoToday());
     $("mailBody").value = fillTemplate(mailTpl.body, b, data.config, isoToday());
     $("mailHint").textContent = mailTpl.stageTo && b.stage === "new" ? "Opening your email app also moves this enquiry to “Quoted” and logs today as last contact." : "Opening your email app logs today as last contact.";
     $("mailView").hidden = false;
-  });
+  }
   $("mailClose").onclick = () => $("mailView").hidden = true;
   $("mailCopy").onclick = async () => {
     const txt = $("mailSubject").value + "\n\n" + $("mailBody").value;
@@ -927,7 +1246,8 @@ if (typeof document !== "undefined") (function () {
   };
   $("mailSend").onclick = () => {
     const to = $("mailTo").value.trim();
-    const patch = { lastContact: isoToday() };
+    const cur = editing || {};
+    const patch = { lastContact: isoToday(), emails: (cur.emails || []).concat([{ tpl: mailTpl ? mailTpl.name : "Email", tplId: mailTpl ? mailTpl.id : "", to, subject: $("mailSubject").value, body: $("mailBody").value, at: nowISO() }]) };
     if (mailTpl && mailTpl.stageTo && $("f-stage").value === "new") patch.stage = mailTpl.stageTo;
     saveForm(patch, true);
     const url = "mailto:" + encodeURIComponent(to).replace(/%40/g, "@") + "?subject=" + encodeURIComponent($("mailSubject").value) + "&body=" + encodeURIComponent($("mailBody").value);
