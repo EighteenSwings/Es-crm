@@ -451,7 +451,7 @@ if (typeof document !== "undefined") (function () {
       const col = items.filter(b => b.stage === s.id).sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
       const val = col.reduce((t, b) => t + calc(b).total, 0);
       const emptyText = s.id === "new" && empty ? "No enquiries yet. Tap “+ New enquiry” to add the first one." : "Nothing here";
-      return `<div class="col"><div class="colhead">${s.id === "lost" ? "" : `<span class="hole">${i + 1}</span>`}<h3>${s.label}</h3><span class="count">${col.length}</span>${col.length ? `<span class="val">${gbp(val)}</span>` : ""}</div>
+      return `<div class="col" data-stage="${s.id}"><div class="colhead"><div class="ch-top">${s.id === "lost" ? "" : `<span class="hole">${i + 1}</span>`}<h3>${s.label}</h3><span class="count">${col.length}</span></div><div class="ch-val num">${gbp(val)}</div></div>
         ${col.length ? col.map(cardHTML).join("") : `<div class="empty-col">${emptyText}</div>`}</div>`;
     }).join("");
   }
