@@ -21,7 +21,7 @@ If two devices edit different bookings, both changes are kept. If they edit the 
 1. Create a free account at github.com (or sign in).
 2. Click **New repository**. Name it `es-crm`, set it to **Public**, tick **Add a README**, and create it.
    Public is required for free Pages hosting. It's fine: the code contains no client data.
-3. In the repository, click **Add file → Upload files**. Drag in everything from this folder: `index.html`, `styles.css`, `app.js`, `config.js`, `sw.js`, `manifest.webmanifest`, and the `icons` folder. Click **Commit changes**.
+3. In the repository, click **Add file → Upload files**. Drag in everything from this folder: `index.html`, `styles.css`, `app.js`, `config.js`, `sw.js`, `manifest.webmanifest`, and the `icons` and `fonts` folders. Click **Commit changes**.
 4. Go to **Settings → Pages**. Under "Build and deployment", set Source to **Deploy from a branch**, Branch to **main** and folder **/ (root)**. Save.
 5. After a minute or two, your app is live at
    `https://YOUR-GITHUB-USERNAME.github.io/es-crm/`
@@ -73,7 +73,43 @@ After that, the dot in the top corner shows the sync status. Edits sync on their
 
 ---
 
-## Step 5. Optional: use your own domain
+## Step 5. Website enquiry form (Squarespace)
+
+Each enquiry from the website goes to **info@eighteenswings.co.uk** and drops into the CRM's "New enquiry" column on its own. Squarespace does both for free; the CRM just reads the Sheet.
+
+1. In Squarespace, add a **Form block** to your contact or booking page. Give it these fields (the CRM matches them by name, so keep the wording close):
+   - **Name** (Name field)
+   - **Partner's name or company** (Text, optional)
+   - **Email** and **Phone**
+   - **Event date** (Date field)
+   - **Type of event** (Dropdown: Wedding morning, Wedding drinks reception, Wedding morning and reception, Corporate, Private party, Other)
+   - **Venue** and **Venue postcode** (Text)
+   - **Number of guests** (Number)
+   - **How did you hear about us?** (Dropdown, optional)
+   - **Message** (Text area)
+2. Open the form block's **Storage** settings:
+   - **Email:** set it to `info@eighteenswings.co.uk`.
+   - **Google Drive:** connect it, signed in to the same Google account the CRM uses. Squarespace creates a Google Sheet for the responses.
+3. Submit one test enquiry on the live site, then open the new Sheet in Google Drive and copy its link from the address bar.
+4. In the CRM: **Data → Website enquiries**, paste the link, tap **Save link**, then **Check for new enquiries**. The test should appear in "New enquiry" with a green WEBSITE tag. Delete it once you've checked it; it won't come back.
+
+From then on, the CRM checks the Sheet every time it syncs. Don't rename the Sheet's column headings, and never delete rows you haven't imported yet.
+
+Squarespace's date field reads month/day/year. The CRM reads it that way, and keeps the date exactly as entered in the notes so you can double-check.
+
+---
+
+## Step 6. Business details, quotes and invoices
+
+Go to **Packages** and fill in **Business details**: trading name, email, phone, the legal company name and number, registered address, and bank details. These appear on quotes and invoices. Bank details only show on invoices.
+
+- **Quote PDF** and **Invoice** (deposit or balance) are at the bottom of each booking. Tap **Print or save PDF**, then choose "Save as PDF". This works best from a computer.
+- **Email** opens a ready-written email in your email app, filled in with the client's details. Edit the wording under **Packages → Email templates**.
+- **Distance** is worked out from your base postcode (GL19 4HW, changeable under Packages) using free services: postcodes.io for postcodes and OpenStreetMap for the driving route and map. It needs a connection; offline, the mileage stays as typed.
+
+---
+
+## Step 7. Optional: use your own domain
 
 Once eighteenswings.co.uk is live, you can serve the app at `crm.eighteenswings.co.uk`:
 
@@ -107,6 +143,7 @@ Don't overwrite `config.js` with a blank copy, or you'll lose your Client ID.
 I'm not a lawyer; these are practical pointers, not legal advice.
 
 - **Where data lives:** on each signed-in device, and in Google Drive. List both in your privacy notice and record of processing ("client contact and event details, stored in Google Workspace and on staff devices").
+- **Distance lookups:** only the venue postcode is sent to postcodes.io and the OpenStreetMap route service. No names or contact details leave the app.
 - **Google as processor:** in the Google Workspace Admin console, check that the **Cloud Data Processing Addendum** is accepted (usually under Account → Legal and compliance).
 - **Who controls the data:** while bookings sit in GBI Mitchell's Drive for an ES business, make sure your privacy notice names the right company, and update it when ES moves to its own Limited company and Workspace.
 - **Access requests:** **Data → Update Google Sheet** produces a readable spreadsheet of everything held, which makes "what do you hold on me?" requests quick to answer.
